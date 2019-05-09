@@ -136,11 +136,27 @@ class CaptioningRNN(object):
         # with respect to all model parameters. Use the loss and grads variables   #
         # defined above to store loss and gradients; grads[k] should give the      #
         # gradients for self.params[k].                                            #
-        #                                                                          #
-        # Note also that you are allowed to make use of functions from layers.py   #
-        # in your implementation, if needed.                                       #
         ############################################################################
-        pass
+        h0,cache0=affine_forward(features,W_proj,b_proj)
+        word_vec,cache1=word_embedding_forward(captions_in,W_embed)
+        if self.cell_type=="rnn":
+            hidden_states,cache2=rnn_forward(word_vec,h0,Wx,Wh,b)
+        scores,cache3=temporal_affine_forward(hidden_states,W_vocab,b_vocab)
+        loss,dscores=temporal_softmax_loss(scores,captions_out,mask)
+
+        dhidden_states,grads['W_vocab'],grads['b_vocab']=temporal_affine_backward(dscores,cache3)
+        if self.cell_type=='rnn':
+            dword_vec,dh0,grads['Wx'],grads['Wh'],grads['b']=rnn_backward(dhidden_states,cache2)
+        grads['W_embed']=word_embedding_backward(dword_vec,cache1)
+        dfeatures,grads['W_proj'],grads['b_proj']=affine_backward(dh0,cache0)
+
+
+
+
+
+
+
+
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -193,7 +209,7 @@ class CaptioningRNN(object):
         # (3) Apply the learned affine transformation to the next hidden state to #
         #     get scores for all words in the vocabulary                          #
         # (4) Select the word with the highest score as the next word, writing it #
-        #     (the word index) to the appropriate slot in the captions variable   #
+        #     to the appropriate slot in the captions variable                    #
         #                                                                         #
         # For simplicity, you do not need to stop generating after an <END> token #
         # is sampled, but you can if you want to.                                 #
@@ -201,11 +217,28 @@ class CaptioningRNN(object):
         # HINT: You will not be able to use the rnn_forward or lstm_forward       #
         # functions; you'll need to call rnn_step_forward or lstm_step_forward in #
         # a loop.                                                                 #
-        #                                                                         #
-        # NOTE: we are still working over minibatches in this function. Also if   #
-        # you are using an LSTM, initialize the first cell state to zeros.        #
         ###########################################################################
-        pass
+        N, D = features.shape
+        affine_out, affine_cache = affine_forward(features ,W_proj, b_proj)
+    
+        prev_word_idx = [self._start]*N
+        prev_h = affine_out
+        prev_c = np.zeros(prev_h.shape)
+        captions[:,0] = self._start
+        for i in range(1,max_length):
+            prev_word_embed  = W_embed[prev_word_idx]
+            if self.cell_type == 'rnn':
+                next_h, rnn_step_cache = rnn_step_forward(prev_word_embed, prev_h, Wx, Wh, b)
+            elif self.cell_type == 'lstm':
+                next_h, next_c,lstm_step_cache = lstm_step_forward(prev_word_embed, prev_h, prev_c, Wx, Wh, b)
+                prev_c = next_c
+            else:
+                raise ValueError('Invalid cell_type "%s"' % self.cell_type)
+            vocab_affine_out, vocab_affine_out_cache = affine_forward(next_h, W_vocab, b_vocab)
+            captions[:,i] = list(np.argmax(vocab_affine_out, axis = 1))
+            prev_word_idx = captions[:,i]
+            prev_h = next_h
+
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
