@@ -141,12 +141,16 @@ class CaptioningRNN(object):
         word_vec,cache1=word_embedding_forward(captions_in,W_embed)
         if self.cell_type=="rnn":
             hidden_states,cache2=rnn_forward(word_vec,h0,Wx,Wh,b)
+        elif self.cell_type=="lstm":
+            hidden_states,cache2=lstm_forward(word_vec,h0,Wx,Wh,b)
         scores,cache3=temporal_affine_forward(hidden_states,W_vocab,b_vocab)
         loss,dscores=temporal_softmax_loss(scores,captions_out,mask)
 
         dhidden_states,grads['W_vocab'],grads['b_vocab']=temporal_affine_backward(dscores,cache3)
         if self.cell_type=='rnn':
             dword_vec,dh0,grads['Wx'],grads['Wh'],grads['b']=rnn_backward(dhidden_states,cache2)
+        elif self.cell_type=="lstm":
+            dword_vec,dh0,grads['Wx'],grads['Wh'],grads['b']=lstm_backward(dhidden_states,cache2)
         grads['W_embed']=word_embedding_backward(dword_vec,cache1)
         dfeatures,grads['W_proj'],grads['b_proj']=affine_backward(dh0,cache0)
 
